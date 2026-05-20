@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(git check-ignore *)",
+      "Bash(git worktree *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const yaml = require\\('js-yaml'\\); const fs = require\\('fs'\\); try { yaml.load\\(fs.readFileSync\\('.github/workflows/update-resources.yml', 'utf8'\\)\\); console.log\\('YAML is valid'\\); } catch\\(e\\) { console.error\\('YAML error:', e.message\\); process.exit\\(1\\); }\")",
+      "Bash(node *)",
+      "Bash(npm run *)",
+      "Bash(npx tsx *)",
+      "Bash(git -C /c/Users/lenovo/Desktop/github-showcase/.worktrees/auto-fetch add package.json)",
+      "Bash(git -C /c/Users/lenovo/Desktop/github-showcase/.worktrees/auto-fetch commit -m ' *)",
+      "Bash(git *)"
+    ]
+  }
+}
