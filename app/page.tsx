@@ -179,7 +179,7 @@ export default function Home() {
               <button
                 key={repo.id}
                 onClick={() => setSelectedRepo(repo)}
-                className="p-4 bg-white rounded-xl border border-border-light hover:border-accent hover:shadow-lg transition-all text-left group"
+                className="p-4 bg-surface rounded-xl border border-border-light hover:border-accent hover:shadow-lg transition-all text-left group"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-semibold text-sm text-primary group-hover:text-accent transition-colors">
