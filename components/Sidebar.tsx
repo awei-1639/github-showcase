@@ -95,7 +95,7 @@ export default function Sidebar({ categories, selectedCategory, onSelectCategory
                 <button
                   key={rec.id}
                   onClick={() => onRecommendationClick?.(rec.id)}
-                  className="w-full p-3 rounded-xl bg-white hover:bg-elevated hover:shadow-md transition-all text-left group"
+                  className="w-full p-3 rounded-xl bg-surface hover:bg-elevated hover:shadow-md transition-all text-left group"
                 >
                   <div className="font-medium text-sm text-primary group-hover:text-accent transition-colors">
                     {rec.name}

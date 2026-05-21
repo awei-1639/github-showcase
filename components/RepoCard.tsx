@@ -49,7 +49,7 @@ export default function RepoCard({ repo, onClick, index }: RepoCardProps) {
       whileTap={{ scale: 0.99 }}
       className={`
         group relative overflow-hidden
-        bg-white rounded-2xl border border-border-light
+        bg-surface rounded-2xl border border-border-light
         shadow-sm
         transition-all duration-300 ease-out cursor-pointer
         hover:shadow-xl hover:-translate-y-1

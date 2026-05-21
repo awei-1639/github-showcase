@@ -59,9 +59,9 @@ export default function RepoPanel({ repo, onClose, relatedRepos = [], onRelatedC
             initial="hidden"
             animate="show"
             exit="exit"
-            className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white z-50 shadow-2xl overflow-hidden"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-surface z-50 shadow-2xl overflow-hidden"
           >
-            <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-xl border-b border-border-light px-6 py-5 flex items-center justify-between">
+            <div className="sticky top-0 z-10 bg-surface/90 backdrop-blur-xl border-b border-border-light px-6 py-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center shadow-lg shadow-accent/20">
                   <Github className="w-5 h-5 text-white" />
@@ -153,7 +153,7 @@ export default function RepoPanel({ repo, onClose, relatedRepos = [], onRelatedC
                         key={r.id}
                         onClick={() => onRelatedClick?.(r)}
                         whileHover={{ x: 4 }}
-                        className="w-full text-left p-4 rounded-2xl bg-elevated border border-border-light hover:border-accent/30 hover:bg-white transition-all duration-200 group"
+                        className="w-full text-left p-4 rounded-2xl bg-elevated border border-border-light hover:border-accent/30 hover:bg-surface transition-all duration-200 group"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-primary group-hover:text-accent transition-colors">{r.name}</span>
