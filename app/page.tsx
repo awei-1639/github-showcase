@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import Fuse from 'fuse.js'
 import { Layers, Search, Star } from 'lucide-react'
@@ -23,12 +23,12 @@ function useSearchHistory() {
     }
   }, [])
 
-  const addToHistory = (query: string) => {
+  const addToHistory = useCallback((query: string) => {
     if (!query.trim()) return
     const newHistory = [query, ...history.filter(h => h !== query)].slice(0, 5)
     setHistory(newHistory)
     localStorage.setItem('searchHistory', JSON.stringify(newHistory))
-  }
+  }, [history])
 
   return { history, addToHistory }
 }
@@ -56,7 +56,7 @@ export default function Home() {
     if (searchQuery.length > 2) {
       addToHistory(searchQuery)
     }
-  }, [searchQuery])
+  }, [searchQuery, addToHistory])
 
   const fuse = useMemo(() => new Fuse(reposData as Repo[], fuseOptions), [])
 
