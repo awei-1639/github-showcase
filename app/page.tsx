@@ -170,28 +170,46 @@ export default function Home() {
 
       {editorialPicks.length > 0 && (
         <section className="mb-10">
-          <div className="flex items-center gap-2 mb-6">
-            <Star className="w-5 h-5 text-accent" />
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 border border-neon-cyan/30 flex items-center justify-center">
+              <Star className="w-4 h-4 text-neon-cyan" />
+            </div>
             <h2 className="text-lg font-bold text-primary">编辑精选</h2>
+            <span className="text-xs text-muted px-2 py-0.5 rounded-full bg-elevated">推荐项目</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {editorialPicks.map(repo => (
-              <button
+            {editorialPicks.map((repo, index) => (
+              <motion.button
                 key={repo.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
                 onClick={() => setSelectedRepo(repo)}
-                className="p-4 bg-surface rounded-xl border border-border-light hover:border-accent hover:shadow-lg transition-all text-left group"
+                className="relative p-5 bg-surface rounded-xl border border-border-light hover:border-neon-cyan/50 transition-all text-left group overflow-hidden"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-semibold text-sm text-primary group-hover:text-accent transition-colors">
-                    {repo.name}
-                  </span>
+                {/* Glow effect on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/5 to-neon-purple/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                {/* Top accent line */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                <div className="relative">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse" />
+                    <span className="font-bold text-sm text-primary group-hover:text-neon-cyan transition-colors">
+                      {repo.name}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted line-clamp-2 mb-3">{repo.description}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-xs text-muted">
+                      <Star className="w-3 h-3 text-amber-400" />
+                      <span>{repo.stars}</span>
+                    </div>
+                    <span className="text-xs text-neon-purple/70 group-hover:text-neon-purple transition-colors">查看 →</span>
+                  </div>
                 </div>
-                <p className="text-xs text-secondary line-clamp-2">{repo.description}</p>
-                <div className="flex items-center gap-1 mt-3 text-xs text-muted">
-                  <Star className="w-3 h-3 text-amber-400" />
-                  <span>{repo.stars}</span>
-                </div>
-              </button>
+              </motion.button>
             ))}
           </div>
         </section>
