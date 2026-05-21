@@ -9,18 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        void: 'var(--bg-base)',
-        surface: 'var(--bg-surface)',
-        elevated: 'var(--bg-elevated)',
+        void: '#0a0a0f',
+        surface: '#12121a',
+        elevated: '#1a1a24',
         'neon-cyan': '#00f5ff',
         'neon-pink': '#ff2d6a',
         'neon-purple': '#bf5af2',
-        'text-primary': 'var(--text-primary)',
-        'text-secondary': 'var(--text-secondary)',
-        'text-muted': 'var(--text-muted)',
-        accent: 'var(--accent)',
-        border: 'var(--border)',
-        'border-light': 'var(--border-light)',
+        'text-primary': '#e4e4ed',
+        'text-secondary': '#9090a0',
+        'text-muted': '#6b6b7a',
+        accent: '#6366f1',
+        border: '#2a2a3a',
+        'border-light': '#1e1e2e',
       },
       fontFamily: {
         orbitron: ['Orbitron', 'sans-serif'],
