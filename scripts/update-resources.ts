@@ -1,23 +1,20 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { FetchResult, UpdatePayload, CategoryConfig, Repo } from './types'
-import { searchRepos, getTrendingRepos } from './github-api'
-import { filterRepos, deduplicateByUrl, assignCategory, generateTags } from './filters'
+import { FetchResult, UpdatePayload, Repo } from './types'
+import { searchRepos, getTrendingRepos, getRateLimitStatus, getRepoActivity } from './github-api'
+import { filterRepos, deduplicateByUrl, assignCategory, generateTags, getCategoryConfigs, calculateQualityScore } from './filters'
 import { generatePRBody, generateUpdateJSON } from './pr-template'
 
-const CATEGORIES: CategoryConfig[] = [
-  { name: 'learning', searchTerms: ['programming tutorial', 'learn to code'], trendingPath: '' },
-  { name: 'tools', searchTerms: ['cli tools', 'developer utilities'], trendingPath: '' },
-  { name: 'frontend', searchTerms: ['javascript framework', 'react library'], trendingPath: '' },
-  { name: 'api', searchTerms: ['rest api', 'graphql server'], trendingPath: '' },
-  { name: 'devops', searchTerms: ['docker kubernetes', 'ci cd tools'], trendingPath: '' },
-  { name: 'ai', searchTerms: ['machine learning', 'neural network'], trendingPath: '' }
-]
-
+// Expanded search queries for better coverage
 const SEARCH_QUERIES = [
-  'awesome list stars:>50000',
-  'best tools stars:>20000',
-  'top projects stars:>30000'
+  { query: 'stars:>50000 awesome list', perPage: 10 },
+  { query: 'stars:>30000 developer tools', perPage: 8 },
+  { query: 'stars:>20000 javascript framework', perPage: 8 },
+  { query: 'stars:>15000 learning programming', perPage: 8 },
+  { query: 'stars:>10000 artificial intelligence', perPage: 10 },
+  { query: 'stars:>10000 rest api graphql', perPage: 8 },
+  { query: 'stars:>10000 docker kubernetes', perPage: 8 },
+  { query: 'stars:>5000 security tools', perPage: 8 },
 ]
 
 const DATA_DIR = path.join(__dirname, '..', 'data')
@@ -27,39 +24,67 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function fetchAllRepos(existingUrls: Set<string>): Promise<FetchResult[]> {
+function logProgress(current: number, total: number, message: string): void {
+  const percentage = Math.round((current / total) * 100)
+  console.log(`[${percentage}%] ${current}/${total}: ${message}`)
+}
+
+async function fetchAllRepos(existingUrls: Set<string>): Promise<{ repos: FetchResult[]; sources: Map<string, string> }> {
   const allRepos: FetchResult[] = []
+  const sources = new Map<string, string>()
+  let totalTasks = 1 + SEARCH_QUERIES.length + getCategoryConfigs().length * 2
+  let completedTasks = 0
 
-  // 1. Fetch trending repos (20 repos)
-  console.log('Fetching trending repos...')
-  const trending = await getTrendingRepos('', 20)
-  console.log(`Fetched ${trending.length} trending repos`)
-  allRepos.push(...trending)
-  await delay(1000)
+  // 1. Fetch trending repos (30 repos)
+  logProgress(completedTasks, totalTasks, 'Fetching trending repos...')
+  const trending = await getTrendingRepos('', 30)
+  for (const repo of trending) {
+    allRepos.push(repo)
+    sources.set(repo.url, 'trending')
+  }
+  completedTasks++
+  logProgress(completedTasks, totalTasks, `Fetched ${trending.length} trending repos`)
+  await delay(500)
 
-  // 2. Search queries (5 repos each, with delay)
-  console.log('Fetching from search queries...')
-  for (const query of SEARCH_QUERIES) {
-    console.log(`  Searching: ${query}`)
-    const results = await searchRepos(query, 5)
-    console.log(`    Found ${results.length} repos`)
-    allRepos.push(...results)
-    await delay(1000)
+  // 2. Search queries
+  for (const sq of SEARCH_QUERIES) {
+    logProgress(completedTasks, totalTasks, `Searching: ${sq.query}`)
+    const results = await searchRepos(sq.query, sq.perPage)
+    for (const repo of results) {
+      if (!allRepos.find((r) => r.url === repo.url)) {
+        allRepos.push(repo)
+        sources.set(repo.url, 'search')
+      }
+    }
+    completedTasks++
+    logProgress(completedTasks, totalTasks, `Found ${results.length} repos for: ${sq.query}`)
+    await delay(500)
   }
 
-  // 3. Category-specific searches (3 repos each, with delay)
-  console.log('Fetching from category searches...')
-  for (const category of CATEGORIES) {
-    for (const term of category.searchTerms) {
-      console.log(`  [${category.name}] Searching: ${term}`)
-      const results = await searchRepos(term, 3)
-      console.log(`    Found ${results.length} repos`)
-      allRepos.push(...results)
-      await delay(1000)
+  // 3. Category-specific searches
+  const categories = getCategoryConfigs()
+  for (const cat of categories) {
+    for (const term of cat.searchTerms.slice(0, 2)) {
+      logProgress(completedTasks, totalTasks, `[${cat.name}] Searching: ${term}`)
+      try {
+        const results = await searchRepos(term, 5)
+        for (const repo of results) {
+          if (!allRepos.find((r) => r.url === repo.url)) {
+            allRepos.push(repo)
+            sources.set(repo.url, 'category')
+          }
+        }
+        completedTasks++
+        logProgress(completedTasks, totalTasks, `Found ${results.length} repos for [${cat.name}]: ${term}`)
+      } catch (error) {
+        console.error(`Error searching ${cat.name}/${term}:`, error)
+        completedTasks++
+      }
+      await delay(500)
     }
   }
 
-  console.log(`Total repos fetched: ${allRepos.length}`)
+  console.log(`\nTotal repos fetched: ${allRepos.length}`)
 
   // Deduplicate by URL
   const seenUrls = new Set<string>()
@@ -73,48 +98,84 @@ async function fetchAllRepos(existingUrls: Set<string>): Promise<FetchResult[]> 
 
   console.log(`After deduplication: ${deduplicated.length} repos`)
 
-  return deduplicated
+  return { repos: deduplicated, sources }
 }
 
-function loadExistingRepos(filePath: string): Set<string> {
-  const existingUrls = new Set<string>()
+function loadExistingRepos(filePath: string): { repos: Map<string, Repo>; urls: Set<string> } {
+  const repos = new Map<string, Repo>()
+  const urls = new Set<string>()
+
   try {
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf-8')
-      const repos: Repo[] = JSON.parse(content)
-      for (const repo of repos) {
-        existingUrls.add(repo.url)
+      const data = JSON.parse(content) as Repo[]
+      for (const repo of data) {
+        repos.set(repo.id, repo)
+        urls.add(repo.url)
       }
-      console.log(`Loaded ${repos.length} existing repos`)
+      console.log(`Loaded ${repos.size} existing repos`)
     } else {
       console.log('No existing repos file found, starting fresh')
     }
   } catch (error) {
     console.error('Error loading existing repos:', error)
   }
-  return existingUrls
+
+  return { repos, urls }
+}
+
+async function enrichWithActivity(repo: FetchResult): Promise<{
+  recentCommits: number
+  lastCommitDate: string
+}> {
+  try {
+    const parts = repo.url.replace('https://github.com/', '').split('/')
+    if (parts.length >= 2) {
+      const [owner, name] = parts
+      const activity = await getRepoActivity(owner, name)
+      return {
+        recentCommits: activity.recentCommits,
+        lastCommitDate: activity.lastCommitDate || repo.pushedAt,
+      }
+    }
+  } catch {
+    // Ignore errors for individual repo enrichment
+  }
+
+  return {
+    recentCommits: 0,
+    lastCommitDate: repo.pushedAt,
+  }
 }
 
 function createUpdatePayload(
   date: string,
   newRepos: FetchResult[],
-  categoryNames: string[]
+  categoryNames: string[],
+  sources: Map<string, string>
 ): UpdatePayload {
   const projects = newRepos.map((repo) => {
     const category = assignCategory(repo, categoryNames)
     const tags = generateTags(repo)
-    const reason = `Matched: ${repo.name} (${repo.stars} stars)`
+    const source = sources.get(repo.url) || 'search'
+    const qualityScore = calculateQualityScore(repo)
 
     return {
       name: repo.name,
       description: repo.description,
       url: repo.url,
       stars: repo.stars,
+      starsCount: repo.starsCount,
       category,
       tags,
       author: repo.url.split('/').slice(-2, -1)[0] || '',
-      source: 'search' as const,
-      reason
+      source: source as 'trending' | 'search' | 'category',
+      reason: `Quality score: ${qualityScore.toFixed(2)} | Stars: ${repo.stars}`,
+      activityMetrics: {
+        openIssues: repo.openIssuesCount,
+        recentCommits: 0, // Will be enriched later
+        lastCommitDate: repo.pushedAt,
+      },
     }
   })
 
@@ -122,19 +183,38 @@ function createUpdatePayload(
     date,
     action: 'add',
     projects,
-    removed: []
+    removed: [],
+    stats: {
+      totalFetched: newRepos.length,
+      totalFiltered: newRepos.length,
+      totalAdded: projects.length,
+      totalRemoved: 0,
+      byCategory: projects.reduce((acc, p) => {
+        acc[p.category] = (acc[p.category] || 0) + 1
+        return acc
+      }, {} as Record<string, number>),
+      bySource: projects.reduce((acc, p) => {
+        acc[p.source] = (acc[p.source] || 0) + 1
+        return acc
+      }, {} as Record<string, number>),
+    },
   }
 }
 
 async function main(): Promise<void> {
   const today = new Date().toISOString().split('T')[0]
-  console.log(`Starting update run for date: ${today}`)
+  console.log(`🚀 Starting resource update for: ${today}`)
+  console.log(`Rate limit status:`, getRateLimitStatus())
+  console.log('---')
 
   // Load existing repos
-  const existingUrls = loadExistingRepos(REPOS_FILE)
+  const { repos: existingRepos, urls: existingUrls } = loadExistingRepos(REPOS_FILE)
 
   // Fetch new repos
-  const fetchedRepos = await fetchAllRepos(existingUrls)
+  const { repos: fetchedRepos, sources } = await fetchAllRepos(existingUrls)
+
+  console.log('\n---')
+  console.log('Filtering by quality...')
 
   // Filter by quality
   const filteredRepos = filterRepos(fetchedRepos)
@@ -145,13 +225,16 @@ async function main(): Promise<void> {
   console.log(`New repos to add: ${newRepos.length}`)
 
   if (newRepos.length === 0) {
-    console.log('No new repos to add. Exiting.')
+    console.log('\n✅ No new repos to add. Exiting.')
     return
   }
 
+  console.log('\n---')
+  console.log('Generating update payload...')
+
   // Generate update payload
-  const categoryNames = CATEGORIES.map((c) => c.name)
-  const payload = createUpdatePayload(today, newRepos, categoryNames)
+  const categoryNames = getCategoryConfigs().map((c) => c.name)
+  const payload = createUpdatePayload(today, newRepos, categoryNames, sources)
 
   // Write output files
   const dateStr = today.replace(/-/g, '')
@@ -167,15 +250,30 @@ async function main(): Promise<void> {
   fs.writeFileSync(prBodyPath, prBody, 'utf-8')
   console.log(`Wrote PR body: ${prBodyPath}`)
 
-  // GitHub Actions output
-  console.log('::set-output name=update_json_path::' + updateJsonPath)
-  console.log('::set-output name=pr_body_path::' + prBodyPath)
-  console.log('::set-output name=new_repos_count::' + newRepos.length)
+  // Print summary
+  console.log('\n---')
+  console.log('📊 Update Summary:')
+  console.log(`   Total fetched: ${payload.stats.totalFetched}`)
+  console.log(`   After filtering: ${payload.stats.totalFiltered}`)
+  console.log(`   New repos: ${payload.stats.totalAdded}`)
+  console.log('   By category:', payload.stats.byCategory)
+  console.log('   By source:', payload.stats.bySource)
 
-  console.log(`\nUpdate complete! Found ${newRepos.length} new repos to add.`)
+  // GitHub Actions output (using new syntax)
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `update_json_path=${updateJsonPath}\n`)
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `pr_body_path=${prBodyPath}\n`)
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `new_repos_count=${payload.stats.totalAdded}\n`)
+  } else {
+    console.log('\n::set-output name=update_json_path::' + updateJsonPath)
+    console.log('::set-output name=pr_body_path::' + prBodyPath)
+    console.log('::set-output name=new_repos_count::' + payload.stats.totalAdded)
+  }
+
+  console.log('\n✅ Update complete!')
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error)
+  console.error('\n❌ Fatal error:', error)
   process.exit(1)
 })

@@ -1,19 +1,32 @@
-name: Update GitHub Resources
+name: Update Resources
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    # Run every Sunday at 02:00 UTC (北京时间 10:00)
+    - cron: '0 2 * * 0'
   workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force update even if no new repos'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: update-resources
+  cancel-in-progress: true
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  update-resources:
+  update:
+    name: Fetch and Update Resources
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -25,16 +38,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check GitHub Token
+        run: |
+          if [ -z "${{ secrets.GH_TOKEN }}" ]; then
+            echo "Warning: GH_TOKEN not set. Using unauthenticated requests (rate limited to 60/hour)"
+          else
+            echo "GitHub Token available for higher rate limits"
+          fi
+
       - name: Run update script
+        id: update
         run: npx tsx scripts/update-resources.ts
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || '' }}
+
+      - name: Read update results
+        id: results
+        run: |
+          if [ -f data/pr-body.md ]; then
+            echo "pr_body_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_body_length=$(wc -c < data/pr-body.md)" >> $GITHUB_OUTPUT
+          else
+            echo "pr_body_exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        if: steps.results.outputs.pr_body_exists == 'true'
+        uses: peter-evans/create-pull-request@v6
         with:
-          commit_message: 'chore: update resources'
-          branch: chore/update-resources-$(date +%Y-%m-%d)
-          title: 'chore: update resources $(date +%Y-%m-%d)'
+          token: ${{ secrets.GH_TOKEN || github.token }}
+          commit-message: 'chore: update resources - auto-fetch'
+          title: '📦 资源更新 - $(date +"%Y-%m-%d")'
+          body-path: data/pr-body.md
+          branch: update/resources-$(date +"%Y-%m-%d")
+          delete-branch: true
+          draft: true
           labels: |
             automated
-            resources-update
-          delete-branch: true
+            resource-update
+
+      - name: Upload Update JSON
+        if: steps.results.outputs.pr_body_exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-json
+          path: data/repos-update-*.json
+          retention-days: 7
+
+      - name: Send failure notification
+        if: failure()
+        run: |
+          echo "Resource update failed. Check the workflow logs for details."
