@@ -5,11 +5,6 @@ on:
     # Run every Sunday at 02:00 UTC (北京时间 10:00)
     - cron: '0 2 * * 0'
   workflow_dispatch:
-    inputs:
-      force_update:
-        description: 'Force update even if no new repos'
-        required: false
-        default: 'false'
 
 concurrency:
   group: update-resources
@@ -24,6 +19,8 @@ jobs:
     name: Fetch and Update Resources
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout repository
@@ -32,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -58,14 +55,13 @@ jobs:
         run: |
           if [ -f data/pr-body.md ]; then
             echo "pr_body_exists=true" >> $GITHUB_OUTPUT
-            echo "pr_body_length=$(wc -c < data/pr-body.md)" >> $GITHUB_OUTPUT
           else
             echo "pr_body_exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Pull Request
         if: steps.results.outputs.pr_body_exists == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GH_TOKEN || github.token }}
           commit-message: 'chore: update resources - auto-fetch'
